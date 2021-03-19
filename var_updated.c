@@ -99,6 +99,13 @@ int topSensorReading(){
 	return distance;
 }
 
+int backSensorReading(){
+	//Sharp 4
+	float volt = (float)SensorValue[topIRSensor]/4096*5;
+	float distance = 15.02 * pow(volt , -1.286);
+	return distance;
+}
+
 /* Controlling motor speeds for left and right wheels
 'leftMotorSpeed' and 'rightMotorSpeed' control speed of each motor
 'dir' controls the positive and negative signs for motor speeds to
