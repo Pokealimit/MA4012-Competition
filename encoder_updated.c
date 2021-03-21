@@ -4,14 +4,15 @@
 #include "var_updated.c"
 
 /* Print coordinates and heading onto bluetooth module*/
-void print_bluetooth(int choice){
+void print_bluetooth(int choice, bool debug){
 	// 1 - Print current coordinates
 	char coord[80];
 	switch(choice){
 		case 1: sprintf(coord, "X = %.0f, Y = %.0f, heading = %.0f \n",odom.X,odom.Y,odom.heading);
-  					bnsSerialSend(UART1, coord);
+  				bnsSerialSend(UART1, coord);
+				if (debug)	writeDebugStreamLine("X = %.0f, Y = %.0f, heading = %.0f",odom.X,odom.Y,odom.heading);
   					break;
-  	//case 2: sprintf(coord, "Left count = %d, Left count period = %f",leftcounter,count_period_left/1000.0);
+  	
 	}
 }
 
