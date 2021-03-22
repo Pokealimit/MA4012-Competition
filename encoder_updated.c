@@ -7,12 +7,22 @@
 void print_bluetooth(int choice, bool debug){
 	// 1 - Print current coordinates
 	char coord[80];
-	switch(choice){
-		case 1: sprintf(coord, "X = %.0f, Y = %.0f, heading = %.0f \n",odom.X,odom.Y,odom.heading);
-  				bnsSerialSend(UART1, coord);
-				if (debug)	writeDebugStreamLine("X = %.0f, Y = %.0f, heading = %.0f",odom.X,odom.Y,odom.heading);
-  					break;
-  	
+	static int print_bluetooth_delay = 0;
+	if(nSysTime - print_bluetooth_delay > 500){
+		switch(choice){
+		case 1:
+			sprintf(coord, "X = %.0f, Y = %.0f, heading = %.0f \n",odom.X,odom.Y,odom.heading);
+			bnsSerialSend(UART1, coord);
+			if (debug)	writeDebugStreamLine("X = %.0f, Y = %.0f, heading = %.0f",odom.X,odom.Y,odom.heading);
+			print_bluetooth_delay = nSysTime;
+			break;
+		case 2:
+			sprintf(coord, "Battery: %.2f \n",nAvgBatteryLevel);
+			bnsSerialSend(UART1, coord);
+			if (debug) writeDebugStreamLine("Battery: ",nAvgBatteryLevel);
+			print_bluetooth_delay = nSysTime;
+			break;
+		}
 	}
 }
 
@@ -86,7 +96,7 @@ task mapping{
 		else odom.w_left = 0;
 		if (motor[rightMotor] > 0 && count_period_right > 0)
 			odom.w_right = 1.0 / (count_period_right/1000.0) * PI;
-		else if(motor[rightMotor] < 0 && count_period_left > 0)
+		else if(motor[rightMotor] < 0 && count_period_right > 0)
 			odom.w_right = - 1.0 / (count_period_right/1000.0) * PI;
 		else odom.w_right = 0;
 		odom.v_X = (odom.w_left + odom.w_right) * 3.5/2.0 * cos(odom.heading/180*PI);
@@ -98,63 +108,16 @@ task mapping{
 		taking the current X, Y and heading values and adding them to
 		the change (v_X,v_Y,w respectively) multiplied by the interval time */
 		if (count_period_left > 0 && count_period_right > 0){
-			odom.X = odom.X + odom.v_X * interval/1000.0 * 1.225;		//scaling factor of 1.225 from testing
-			odom.Y = odom.Y + odom.v_Y * interval/1000.0 * 1.225;		//scaling factor of 1.225 from testing
-			// if facing West (337.5 - 22.5 degrees)
-			if (odom.compass_heading == 0){
-				if(odom.heading<=odom.compass_heading + 22.5 && odom.heading>=odom.compass_heading - 22.5)
-				odom.heading = odom.heading + odom.w * 180 / PI * interval/1000.0;
-				else if (odom.heading > 180 && odom.heading < 337.5)
-					odom.heading = 337.5;
-				else if (odom.heading < 180 && odom.heading > 22.5)
-					odom.heading = 22.5;
-			}
-			// if not facing West
-			else {
-				if(odom.heading<=odom.compass_heading + 22.5 && odom.heading>=odom.compass_heading - 22.5)
-					odom.heading = odom.heading + odom.w * 180 / PI * interval/1000.0;
-				else if (odom.heading < odom.compass_heading - 22.5)
-					odom.heading = odom.compass_heading - 22.5;
-				else if (odom.heading > odom.compass_heading + 22.5)
-					odom.heading = odom.compass_heading + 22.5;
-			}
-
-			if (odom.heading >= 360)
-				odom.heading = odom.heading - 360;
-			if (odom.heading < 0)
-				odom.heading = odom.heading + 360;
-			writeDebugStreamLine("X = %f, Y = %f, heading = %f",odom.X,odom.Y,odom.heading);
-			print_bluetooth(1);
+			odom.X = odom.X + odom.v_X * interval/1000.0 * 1.3;		//scaling factor of 1.225 from testing
+			odom.Y = odom.Y + odom.v_Y * interval/1000.0 * 1.3;		//scaling factor of 1.225 from testing
+			odom.heading = odom.heading + 1.6 * odom.w * 180 / PI * interval/1000.0;
 		}
 
+		print_bluetooth(1,0);
+		writeDebugStreamLine("X = %f, Y = %f, heading = %f",odom.X,odom.Y,odom.heading);
 
 		sleep(interval);
 	}
 }
-
-task compass_tracking{
-	// to track compass state
-	float previous_state = compass();
-
-	/* Determine compass reading based on values read from Digital Ports 8-11
-Values read from Ports 8-11 correspond to a 4-bit binary number
-Decimal value = MSB*2^3 + Bit2*2^2 + Bit3*2^1 + LSB
-Decimal value corresponds to a compass direction as given by data sheet */
-while(true){
-	odom.compass_heading = compass();
-	//writeDebugStreamLine("Previous state: %.2f", previous_state);
-	//writeDebugStreamLine("Current state: %.2f", odom.compass_heading);
-
-	if (previous_state!=odom.compass_heading){
-		if ((previous_state == 0 && odom.compass_heading == 315) || (odom.compass_heading == 0 && previous_state == 315)){
-			odom.heading = 337.5;
-		}
-		else odom.heading = (odom.compass_heading + previous_state) / 2;
-		previous_state = odom.compass_heading;
-	}
-}
-
-}
-
 
 #endif
