@@ -54,13 +54,13 @@ int Back_Limit_Switch_NO_CONTACT = 1;
 /* -------------------------
 Functional States
 ---------------------------*/
-int ball_found = 0; //if ball is detected by IR sensor
-int ball_collected = 0;	//number of balls in collection area
-int ball_caught = 0; //if ball is detected by ball limit switch
-int roll_forward = 1;
-int boundary = 0;   //0: bottom, 1: left, 2: top, 3: right
-int phase = 0; 		//0: move to 2/3, 1: subsequent search
-int counter = 0;
+int ball_found; //if ball is detected by IR sensor
+int ball_collected;	//number of balls in collection area
+int ball_caught; //if ball is detected by ball limit switch
+int roll_forward;
+int boundary;   //0: bottom, 1: left, 2: top, 3: right
+int ball_search; 		//0: move to 2/3, 1: subsequent search
+int counter;
 /* -------------------------
 Timing
 ---------------------------*/
@@ -99,13 +99,6 @@ int topSensorReading(){
 	return distance;
 }
 
-int backSensorReading(){
-	//Sharp 4
-	float volt = (float)SensorValue[topIRSensor]/4096*5;
-	float distance = 15.02 * pow(volt , -1.286);
-	return distance;
-}
-
 /* Controlling motor speeds for left and right wheels
 'leftMotorSpeed' and 'rightMotorSpeed' control speed of each motor
 'dir' controls the positive and negative signs for motor speeds to
@@ -114,11 +107,12 @@ determine direction of motion-
 'l': rotate counter-clockwise on the spot
 'r': rotate clockwise on the spot
 'b': backward */
-void moveMotor(float leftMotorSpeed, float rightMotorSpeed, char dir){
+void moveMotor(float leftMotorSpeed, float rightMotorSpeed, char dir, int time){
 	switch (dir){
 	case 'f':
-		motor[leftMotor] = (int)(leftMotorSpeed*127);
-		motor[rightMotor] = (int)(rightMotorSpeed*127);
+	  motor[rightMotor] = (int)(rightMotorSpeed*127);
+		sleep(time);
+	  motor[leftMotor] = (int)(leftMotorSpeed*127);
 		break;
 	case 'l':
 		motor[leftMotor] = - (int)(leftMotorSpeed*127);
@@ -164,13 +158,21 @@ float compass(void){
 void initialise(){
 	//if(starting_pos = 0) odom.X = 40;
 	//else odom.X = 80;
-	odom.X = 30;
+	odom.X = 15;
 	odom.Y = 15;
 	odom.compass_heading = compass(); //To do
 	odom.heading = 90.0;
 	body.length = 30.0;
 	body.width = 30.0;
 	body.wheel_radius = 3.5;
+	ball_found = 0;
+	ball_collected = 0;
+	ball_caught = 0;
+	roll_forward = 1;
+	boundary = 0;
+	ball_search = 1;
+	counter = 0;
+	writeDebugStreamLine("Initialising...");
 }
 
 
