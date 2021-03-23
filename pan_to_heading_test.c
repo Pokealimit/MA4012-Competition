@@ -1,10 +1,10 @@
 #pragma config(UART_Usage, UART1, uartUserControl, baudRate9600, IOPins, None, None)
 #pragma config(UART_Usage, UART2, uartNotUsed, baudRate4800, IOPins, None, None)
-#pragma config(Sensor, in1,    leftIRSensor,   sensorNone)
+#pragma config(Sensor, in1,    leftIRSensor,   sensorAnalog)
 #pragma config(Sensor, in2,    rightIRSensor,  sensorAnalog)
 #pragma config(Sensor, in3,    topIRSensor,    sensorAnalog)
 #pragma config(Sensor, in4,    backIRSensor,   sensorAnalog)
-#pragma config(Sensor, in5,    back_limit_1,    sensorAnalog)
+#pragma config(Sensor, in5,    back_limit_1,   sensorAnalog)
 #pragma config(Sensor, in6,    back_limit_2,   sensorAnalog)
 #pragma config(Sensor, dgtl1,  Power_Switch,   sensorDigitalIn)
 #pragma config(Sensor, dgtl2,  leftWheelSensor, sensorDigitalIn)
@@ -40,7 +40,7 @@ task main(){
 	while(true){
 		while (SensorValue(Power_Switch) == Power_Switch_ON){
 			move_straight(20);
-			pan_to_heading(90);
+			pan_to_heading(270);
 			moveMotor(0,0,'f',0);
 			motor(roller)=0;
 			motor(servo)=-85;
@@ -52,6 +52,7 @@ task main(){
 			motor(roller)=0;
 			motor(servo)=-85;
 			initialise();
+			//print_bluetooth(2,0);
 		}
 	}
 }
@@ -83,31 +84,32 @@ Return: 0 : Action incomplete
 int pan_to_heading(float heading){
 	float array[8] = {0,45,90,135,180,225,270,315};
 	int pointer = 0;
-	if (heading == compass()){
-		moveMotor(0,0,'f',0);
-		sleep(100);
-		writeDebugStreamLine("In pan to heading same heading");
-		pointer = (heading / 45) - 1;
-		if (pointer < 0) {pointer = 7;}
-		while  (array[pointer] != compass() && SensorValue(Power_Switch) == Power_Switch_ON){
-			if (compass() - array[pointer] >= 0 && compass()-array[pointer] <=180 )
-				moveMotor(0.3,0.3,'r',0);
-			else moveMotor(0.3,0.3,'l',0);
-		}
-	}
-		moveMotor(0,0,'f',0);
-		sleep(100);
+	int count_test = 1;
+	int count_test2 =1;
 
+	pointer = (heading / 45) - 1;
+	if (pointer < 0) {pointer = 7;}
+	while  (array[pointer] != compass() && SensorValue(Power_Switch) == Power_Switch_ON){
+		if (compass() - array[pointer] >= 0 && compass()-array[pointer] <=180 )
+			moveMotor(0.5,0.5,'r',0);
+		else moveMotor(0.5,0.5,'l',0);
+	}
+
+	moveMotor(0,0,'f',0);
+	sleep(100);
 
 	while  (heading != compass() && SensorValue(Power_Switch) == Power_Switch_ON){
+		if(count_test2){
+			bnsSerialSend(UART1,"Heading not equal compass\n");
+			count_test2 = 0;
+		}
 		writeDebugStreamLine("In pan to heading diff heading");
 		if (compass() - heading >= 0 && compass()-heading <=180 ){
-			moveMotor(0.3,0.3,'r',0);
+			moveMotor(0.5,0.5,'r',0);
 		}
 		else
-			moveMotor(0.3,0.3,'l',0);
+			moveMotor(0.5,0.5,'l',0);
 	}
-
 	moveMotor(0,0,'f',0);
 	sleep(100);
 

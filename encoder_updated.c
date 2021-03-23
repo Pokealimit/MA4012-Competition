@@ -8,7 +8,7 @@ void print_bluetooth(int choice, bool debug){
 	// 1 - Print current coordinates	// 2 - Print Battery Status
 	char coord[80];
 	static int print_bluetooth_delay = 0;									// Timer state to delay printing 
-	if(nSysTime - print_bluetooth_delay > 500 && print_bluetooth_mutex){
+	if(nSysTime - print_bluetooth_delay > 500){
 		switch(choice){
 		case 1:
 			sprintf(coord, "X = %.0f, Y = %.0f, heading = %.0f \n",odom.X,odom.Y,odom.heading);
