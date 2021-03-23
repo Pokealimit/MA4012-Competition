@@ -8,24 +8,19 @@ void print_bluetooth(int choice, bool debug){
 	// 1 - Print current coordinates	// 2 - Print Battery Status
 	char coord[80];
 	static int print_bluetooth_delay = 0;									// Timer state to delay printing 
-	static int print_bluetooth_mutex = 1;									// Prevent printing while function is already printing
 	if(nSysTime - print_bluetooth_delay > 500 && print_bluetooth_mutex){
 		switch(choice){
 		case 1:
-			print_bluetooth_mutex = 0;
 			sprintf(coord, "X = %.0f, Y = %.0f, heading = %.0f \n",odom.X,odom.Y,odom.heading);
 			bnsSerialSend(UART1, coord);
 			if (debug)	writeDebugStreamLine("X = %.0f, Y = %.0f, heading = %.0f",odom.X,odom.Y,odom.heading);
 			print_bluetooth_delay = nSysTime;
-			print_bluetooth_mutex = 1;
 			break;
 		case 2:
-			print_bluetooth_mutex = 0;
 			sprintf(coord, "Battery: %.2f \n",nAvgBatteryLevel);
 			bnsSerialSend(UART1, coord);
 			if (debug) writeDebugStreamLine("Battery: ",nAvgBatteryLevel);
 			print_bluetooth_delay = nSysTime;
-			print_bluetooth_mutex = 1;
 			break;
 		}
 	}
