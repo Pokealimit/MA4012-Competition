@@ -55,7 +55,7 @@ task main(){
 
 int move_straight(float distance){
 	writeDebugStreamLine("Move straight start...");
-	bnsSerialSend(UART1, "Move straight start..\n");
+	//bnsSerialSend(UART1, "Move straight start..\n");
 	float current_Y = odom.Y;
 	float current_X = odom.X;
 	while (SensorValue(Power_Switch) == Power_Switch_ON && ball_caught == 0 && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<distance){
@@ -72,7 +72,6 @@ int move_straight(float distance){
 		}
 	}
 	writeDebugStreamLine("Move straight end...");
-	bnsSerialSend(UART1, "Move straight end..\n");
 	return 1;
 }
 
@@ -103,35 +102,50 @@ Return: 0 : Action incomplete
 int pan_to_heading(float heading){
 	float array[8] = {0,45,90,135,180,225,270,315};
 	int pointer = 0;
-	if (heading == compass()){
-		moveMotor(0,0,'f',0);
-		sleep(100);
-		writeDebugStreamLine("In pan to heading same heading");
-		pointer = (heading / 45) - 1;
-		if (pointer < 0) pointer = 7;
-		while  (array[pointer] != compass() && SensorValue(Power_Switch) == Power_Switch_ON){
-			if (compass() - array[pointer] > 0 && compass()-array[pointer] <=180 )
+	int count_test = 1;
+	int count_test3 =1;
+	int minimum_t;
+
+	pointer = (heading / 45) - 1;
+	if (pointer < 0)	pointer = 7;
+	while  (array[pointer] != compass() && SensorValue(Power_Switch) == Power_Switch_ON){
+		if(count_test) {
+			char test1[80]; sprintf(test1,"Moving to %d => Bouncing to %d\n",heading,array[pointer]); bnsSerialSend(UART1,test1);
+			count_test = 0;
+		}
+		if (compass() - array[pointer] >= 0 && compass()-array[pointer] <=180){
+			minimum_t = nSysTime;
+			while (nSysTime - minimum_t < 200){ //Move at least for 0.3 second for angles close to the landmarks
 				moveMotor(0.5,0.5,'r',0);
-			else moveMotor(0.5,0.5,'l',0);
+			}
+	}
+		else {
+			minimum_t = nSysTime;
+			while (nSysTime - minimum_t < 200){ //Move at least for 0.3 second for angles close to the landmarks
+			moveMotor(0.5,0.5,'l',0);
+			}
 		}
 	}
+	char test2[80]; sprintf(test2,"Compass reading : %d\n",compass()); bnsSerialSend(UART1,test2);
 
-
-		moveMotor(0,0,'f',0);
-		sleep(100);
-
+	//moveMotor(0,0,'f',0);
+	//sleep(100);
 
 	while  (heading != compass() && SensorValue(Power_Switch) == Power_Switch_ON){
+		if(count_test3){
+			char test3[80]; sprintf(test3,"Bouncing to %d\n",heading);bnsSerialSend(UART1,test3);
+			count_test3 = 0;
+		}
 		writeDebugStreamLine("In pan to heading diff heading");
-		if (compass() - heading > 0 && compass()-heading <=180 ){
-			moveMotor(0.5,0.5,'r',0);
+		if (compass() - heading >= 0 && compass()-heading <=180 ){
+			moveMotor(0.35,0.35,'r',0);
 		}
 		else
 			moveMotor(0.5,0.5,'l',0);
 	}
-
+	bnsSerialSend(UART1,"Moving complete\n");
 	moveMotor(0,0,'f',0);
-	sleep(100);
+	//sleep(100);
 
 	if (heading == compass())  return 1;
 	return 0;
