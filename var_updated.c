@@ -100,6 +100,13 @@ int topSensorReading(){
 	return distance;
 }
 
+int backSensorReading(){
+	//Sharp 4
+	float volt = (float)SensorValue[topIRSensor]/4096*5;
+	float distance = 15.02 * pow(volt , -1.286);
+	return distance;
+}
+
 /* Controlling motor speeds for left and right wheels
 'leftMotorSpeed' and 'rightMotorSpeed' control speed of each motor
 'dir' controls the positive and negative signs for motor speeds to
@@ -173,7 +180,7 @@ void initialise(){
 	boundary = 0;
 	ball_search = 1;
 	counter = 0;
-	phase = 1;
+	phase = 90;
 	//writeDebugStreamLine("Initialising...");
 }
 
@@ -184,42 +191,31 @@ int move_straight(float distance);
 int pan_by_degree(float degree, char dir);
 int pan_to_heading (float heading);
 int pan_and_search(float degree, char dir);
+int obstacle_avoidance();
 
 int boundary_avoidance(){
-	int prev_heading = phase; //Store heading when hit boundary
+	static int counter = 0;
 
-	if (SensorValue(leftLF) == 0){	//Checks left line follower
+	if (SensorValue(leftLF) == 0 || SensorValue(rightLF) == 0){	//Checks left line follower
 		moving_back_t = nSysTime;
 		bnsSerialSend(UART1, "Boundary avoidance ...\n");
-		while (nSysTime - moving_back_t < 400 && SensorValue(Power_Switch) == Power_Switch_ON){ //Move back at 0.3 speed for 0.4 seconds
+		while (nSysTime - moving_back_t < 1500 && SensorValue(Power_Switch) == Power_Switch_ON){ //Move back at 0.3 speed for 0.4 seconds
 			moveMotor(0.3,0.3,'b',0);
 		}
 
-		if (phase == 1) pan_to_heading(90); //Face back to South
-		else if (phase ==2) pan_to_heading(0); //Face back to West
-		else if (phase == 3) pan_to_heading(270);//Face back to North
-		else if ( phase==4 ) pan_to_heading(180);//Face back to East
-
-		//writeDebugStreamLine("return 0");
-		return 0;
-	}
-
-	if (SensorValue(rightLF) == 0){	//Checks right line follower
-		moving_back_t = nSysTime;
-		bnsSerialSend(UART1, "Boundary avoidance ...\n");
-		while (nSysTime - moving_back_t < 400 && SensorValue(Power_Switch) == Power_Switch_ON){ //Move back at 0.3 speed for 0.4 seconds
-			moveMotor(0.3,0.3,'b',0);
+		counter++;
+		if (counter < 2){
+			pan_to_heading(phase);
 		}
-
-		if (phase == 1) pan_to_heading(90); //Face back to South
-		else if (phase ==2) pan_to_heading(0); //Face back to West
-		else if (phase == 3) pan_to_heading(270);//Face back to North
-		else if ( phase==4 ) pan_to_heading(180);//Face back to East
-
+		else {
+			phase -= 90;
+			if (phase < 0) phase = 270;
+			pan_to_heading(phase);
+			counter = 0;
+		}
 		//writeDebugStreamLine("return 0");
 		return 0;
 	}
-
 	//writeDebugStreamLine("return 1");
 	return 1;
 }
@@ -368,9 +364,15 @@ int pan_and_search(float degree, char dir){
 		motor[roller] = 127;
 		motor[servo] = -100;
 		if(leftSensorReading()<distanceThreshold || rightSensorReading()<distanceThreshold){
-			writeDebugStreamLine("Ball detected...");
-			bnsSerialSend(UART1, "Ball detected..\n");
-			if (move_straight(50)) move_straight(-50);
+			//if (topSensorReading()<40){
+			//	writeDebugStreamLine("Obstacle detected");
+			//	bnsSerialSend(UART1, "Obstacle detected!!!\n");
+			//}
+			//else{
+				writeDebugStreamLine("Ball detected...");
+				bnsSerialSend(UART1, "Ball detected..\n");
+				if(move_straight(50)==0) return 0;
+			//}
 		}
 		if(SensorValue[ball_limit_switch]== Ball_Limit_Switch_CONTACT){
 			ball_return();
@@ -417,48 +419,48 @@ int ball_return(void){
 			//stop motor
 			moveMotor(0, 0, 'b', 0);
 			// check if there is an obstacle
-			//if (backSensorReading() > 20){
-			//	moveMotor(0,0,'b',0);
-			//}
+			if (backSensorReading() < 20){
+				moveMotor(0,0,'b',0);
+			}
 			// if no obstacle, release ball
-			//else{
-			writeDebugStreamLine("Both limit switch compressed");
-			writeDebugStreamLine("Reached the ball collection point.");
-			bnsSerialSend(UART1, "Reached ball collection point.\n");
-			motor[servo] = 100;
-			delay(500);
-			writeDebugStreamLine("Ball released.");
-			bnsSerialSend(UART1, "Ball released.\n");
-			ball_caught = 0;
-			ball_collected++;
-			ball_search += 1;
+			else{
+				writeDebugStreamLine("Both limit switch compressed");
+				writeDebugStreamLine("Reached the ball collection point.");
+				bnsSerialSend(UART1, "Reached ball collection point.\n");
+				motor[servo] = 100;
+				delay(500);
+				writeDebugStreamLine("Ball released.");
+				bnsSerialSend(UART1, "Ball released.\n");
+				ball_caught = 0;
+				ball_collected++;
+				ball_search += 1;
 
-			// move servo back to ready for ball position
-			motor[servo] = -100;
-			phase = 1; 		//reset phase
+				// move servo back to ready for ball position
+				motor[servo] = -100;
+				phase = 90; 		//reset phase
 
-			odom.y = 15;
+				odom.Y = 15;
 
-			////move back to (30, 30)
-			//float current_x = odom.x;
-			//float x_dist = odom.x - 30;
-			///*
-			//1. move forward slightly
-			//2. turn left 90 deg
-			//3. move straight x_dist
-			//4. turn right 90 deg
-			//*/
-			//move_straight(15);
-			//pan_by_degree(90, 'l');
-			//move_straight(x_dist);
-			//pan_by_degree(90, 'r');
-			//// need to reverse again?
-			//// moveMotor(0.5,0.5,'b');
-			//// sleep(500);
-			moveMotor(0,0,'f',0);
+				////move back to (30, 30)
+				//float current_x = odom.x;
+				//float x_dist = odom.x - 30;
+				///*
+				//1. move forward slightly
+				//2. turn left 90 deg
+				//3. move straight x_dist
+				//4. turn right 90 deg
+				//*/
+				//move_straight(15);
+				//pan_by_degree(90, 'l');
+				//move_straight(x_dist);
+				//pan_by_degree(90, 'r');
+				//// need to reverse again?
+				//// moveMotor(0.5,0.5,'b');
+				//// sleep(500);
+				moveMotor(0,0,'f',0);
 
-			return 1;
-			//}
+				return 1;
+			}
 		}
 		// if both back limit switch not compressed
 		//else if (SensorValue[back_limit_1] != 0 && SensorValue[back_limit_2] != 0){
@@ -481,6 +483,30 @@ int ball_return(void){
 		}
 	}
 	return 0;
+}
+
+/*Perform obstacle avoidance
+Output: 0 - obstacle avoidance is not performed, resume previous action
+		1 - heading change for obstacle avoidance
+*/
+int obstacle_avoidance(){
+	int prev_heading = phase;
+	int dist = 30;
+	int flag = 0;
+	if (topSensorReading() <= 40 && flag == 0){
+		flag = 1;
+		int current_t = nSysTime;
+		while(nSysTime - current_t < 3000){
+			moveMotor(0,0,'f',0);
+		}
+	}
+
+	if (topSensorReading() <= 40 && flag == 1){
+		int new_heading = prev_heading + 90;
+		if (new_heading == 360) new_heading = 0;
+		pan_to_heading(new_heading);
+	}
+	return flag;
 }
 
 
