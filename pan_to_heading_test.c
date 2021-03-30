@@ -40,7 +40,7 @@ task main(){
 	while(true){
 		while (SensorValue(Power_Switch) == Power_Switch_ON){
 			move_straight(20);
-			pan_to_heading(270);
+			pan_to_heading(90);
 			moveMotor(0,0,'f',0);
 			motor(roller)=0;
 			motor(servo)=-85;

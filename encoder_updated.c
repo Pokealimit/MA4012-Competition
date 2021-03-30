@@ -7,7 +7,7 @@
 void print_bluetooth(int choice, bool debug){
 	// 1 - Print current coordinates	// 2 - Print Battery Status
 	char coord[80];
-	static int print_bluetooth_delay = 0;									// Timer state to delay printing 
+	static int print_bluetooth_delay = 0;									// Timer state to delay printing
 	if(nSysTime - print_bluetooth_delay > 500){
 		switch(choice){
 		case 1:
@@ -113,7 +113,7 @@ task mapping{
 			odom.heading = odom.heading + 1.6 * odom.w * 180 / PI * interval/1000.0;
 		}
 
-		print_bluetooth(1,0);
+		//print_bluetooth(1,0);
 		writeDebugStreamLine("X = %f, Y = %f, heading = %f",odom.X,odom.Y,odom.heading);
 
 		sleep(interval);

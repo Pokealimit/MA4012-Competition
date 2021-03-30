@@ -26,6 +26,7 @@
 #include "var_updated.c"
 #include "encoder_updated.c"
 
+
 task main(){
 	//Initialise variables and start multi-tasking for encoder tasks
 	initialise();
@@ -39,6 +40,11 @@ task main(){
 		while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
 			//main code here:
 
+			if (phase == 0)		bnsSerialSend(UART1, "Phase: 0..\n");
+			if (phase == 90)	bnsSerialSend(UART1, "Phase: 90..\n");
+			if (phase == 180)	bnsSerialSend(UART1, "Phase: 180..\n");
+			if (phase == 270)	bnsSerialSend(UART1, "Phase: 270..\n");
+
 			//bnsSerialSend(UART1, "Moving straight..\n");
 			if (move_straight(60)==0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
 			sleep(500);
@@ -48,18 +54,7 @@ task main(){
 			if (pan_and_search(180, 'r') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
 			sleep(500);
 
-			if (phase == 0){
-				bnsSerialSend(UART1, "Phase: 0..\n");
-			}
-			if (phase == 90){
-				bnsSerialSend(UART1, "Phase: 90..\n");
-			}
-			if (phase == 180){
-				bnsSerialSend(UART1, "Phase: 180..\n");
-			}
-			if (phase == 270){
-				bnsSerialSend(UART1, "Phase: 270..\n");
-			}
+			pan_to_heading(phase);		// Reorientate back to the phase as pan_by_degree is not extremely accurate
 
 		}
 		//If power is off, stop all motors and reinitalise variables
@@ -72,3 +67,19 @@ task main(){
 		}
 	}
 }
+
+//task main(){
+//	//Initialise variables and start multi-tasking for encoder tasks
+//	initialise();
+//	setBaudRate(UART1, baudRate9600);
+//	startTask(counting);
+//	startTask(mapping);
+
+//	while(true){
+//		while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
+//			 move_straight(30);
+//			 pan_to_heading(90);
+//			 sleep(500);
+//		}
+//	}
+//}
