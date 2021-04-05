@@ -61,7 +61,9 @@ int roll_forward;
 int boundary;   //0: bottom, 1: left, 2: top, 3: right
 int ball_search; 		//0: move to 2/3, 1: subsequent search
 int counter;
-int phase;
+float phase;
+int round_count;
+bool first_launch;
 /* -------------------------
 Timing
 ---------------------------*/
@@ -164,8 +166,6 @@ float compass(void){
 
 //Initialise struct variables
 void initialise(){
-	//if(starting_pos = 0) odom.X = 40;
-	//else odom.X = 80;
 	odom.X = 30;
 	odom.Y = 30;
 	odom.compass_heading = compass(); //To do
@@ -181,6 +181,8 @@ void initialise(){
 	ball_search = 1;
 	counter = 0;
 	phase = 90;
+	round_count = 1;
+	first_launch = true;
 	//writeDebugStreamLine("Initialising...");
 }
 
@@ -210,6 +212,8 @@ int boundary_avoidance(){
 		else {
 			phase -= 90;
 			if (phase < 0) phase = 270;
+			//Increase round count when phase changing from 180 to 90 degrees
+			if (phase==90) round_count++;
 			pan_to_heading(phase);
 			counter = 0;
 		}
@@ -229,7 +233,7 @@ int move_straight(float distance){
 	else dir = 'f';
 	distance = fabs(distance);
 
-	while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<distance){
+	while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<distance){
 		moveMotor(1,1,dir,40);
 		motor[roller] = 127;
 		motor[servo] = -100;
@@ -359,20 +363,47 @@ int pan_and_search(float degree, char dir){
 	writeDebugStreamLine("Pan start...");
 	bnsSerialSend(UART1,"Pan start...\n");
 	float current_heading = odom.heading;
+	int enemy_detected = 0;
 	while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && fabs(odom.heading-current_heading)<degree){
 		moveMotor(0.75,0.75,dir,0);
 		motor[roller] = 127;
 		motor[servo] = -100;
 		if(leftSensorReading()<distanceThreshold || rightSensorReading()<distanceThreshold){
-			//if (topSensorReading()<40){
-			//	writeDebugStreamLine("Obstacle detected");
-			//	bnsSerialSend(UART1, "Obstacle detected!!!\n");
-			//}
-			//else{
-				writeDebugStreamLine("Ball detected...");
-				bnsSerialSend(UART1, "Ball detected..\n");
-				if(move_straight(50)==0) return 0;
-			//}
+			int current_t = nSysTime;
+			//TODO: Overpanning time need to be tuned
+			while(nSysTime - current_t < 250){
+				if(topSensorReading() < distanceThreshold){
+					enemy_detected = 1;
+					break; //break out of inner while
+				}
+			}
+			if (enemy_detected == 1){
+				enemy_detected = 0; //the next ball might still be detected with obstacle, therefore, change back for continue panning
+				continue; //continue the outer while
+			}
+			else{
+				switch(dir){
+				case 'r':
+					current_t = nSysTime;
+					while(!(leftSensorReading()<distanceThreshold || rightSensorReading()<distanceThreshold) && (nSysTime - current_t < 250))
+						moveMotor(0.75,0.75,'l',0);
+					moveMotor(0,0,'f',0);
+					break;
+				case 'l':
+					current_t = nSysTime;
+					while(!(leftSensorReading()<distanceThreshold || rightSensorReading()<distanceThreshold) && (nSysTime - current_t < 250))
+						moveMotor(0.75,0.75,'r',0);
+					moveMotor(0,0,'f',0);
+					break;
+				}
+			}
+
+			//Following if loop will only go in if no enemy is detected
+			//TODO: need to add in pan in reverse direction to compesate for the 'overpanning'
+
+			writeDebugStreamLine("Ball detected...");
+			bnsSerialSend(UART1, "Ball detected..\n");
+			if(move_straight(50)==0) return 0;
 		}
 		if(SensorValue[ball_limit_switch]== Ball_Limit_Switch_CONTACT){
 			ball_return();
@@ -413,100 +444,100 @@ int ball_return(void){
 	pan_to_heading(90);
 	//}
 
+	int reverse_t = nSysTime;
+	int stop_t;
+	bool checked_right = false;
+
 	while (ball_caught==1 && SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
+		moveMotor(1,1,'b',0);
+
 		// if both back limit switch triggered
-		if (SensorValue[back_limit_1] == 0 && SensorValue[back_limit_2] == 0){
-			//stop motor
+		if (SensorValue[back_limit_1] == 0 && SensorValue[back_limit_2] == 0 && backSensorReading() > 20){
+			//if no obstacle, stop motor and release ball
+			writeDebugStreamLine("Both limit switch compressed");
+			writeDebugStreamLine("Reached the ball collection point.");
+			bnsSerialSend(UART1, "Reached ball collection point.\n");
 			moveMotor(0, 0, 'b', 0);
-			// check if there is an obstacle
-			if (backSensorReading() < 20){
-				moveMotor(0,0,'b',0);
-			}
-			// if no obstacle, release ball
-			else{
-				writeDebugStreamLine("Both limit switch compressed");
-				writeDebugStreamLine("Reached the ball collection point.");
-				bnsSerialSend(UART1, "Reached ball collection point.\n");
-				motor[servo] = 100;
-				delay(500);
-				writeDebugStreamLine("Ball released.");
-				bnsSerialSend(UART1, "Ball released.\n");
-				ball_caught = 0;
-				ball_collected++;
-				ball_search += 1;
+			motor[servo] = 100;
+			delay(500);
+			writeDebugStreamLine("Ball released.");
+			bnsSerialSend(UART1, "Ball released.\n");
+			ball_caught = 0;
+			ball_collected++;
+			ball_search += 1;
 
-				// move servo back to ready for ball position
-				motor[servo] = -100;
-				phase = 90; 		//reset phase
+			// move servo back to ready for ball position
+			motor[servo] = -100;
+			phase = 90; 		//reset phase
+			odom.Y = 15;
+			round_count = 1;
+			moveMotor(0,0,'f',0);
 
-				odom.Y = 15;
-
-				////move back to (30, 30)
-				//float current_x = odom.x;
-				//float x_dist = odom.x - 30;
-				///*
-				//1. move forward slightly
-				//2. turn left 90 deg
-				//3. move straight x_dist
-				//4. turn right 90 deg
-				//*/
-				//move_straight(15);
-				//pan_by_degree(90, 'l');
-				//move_straight(x_dist);
-				//pan_by_degree(90, 'r');
-				//// need to reverse again?
-				//// moveMotor(0.5,0.5,'b');
-				//// sleep(500);
-				moveMotor(0,0,'f',0);
-
-				return 1;
-			}
+			return 1;
 		}
-		// if both back limit switch not compressed
-		//else if (SensorValue[back_limit_1] != 0 && SensorValue[back_limit_2] != 0){
-		//	// and if back IR sensor sensing > 20cm
-		//	if (backSensorReading() > 20){
-		//		// if there is no obstacles at the back, reverse
-		//		moveMotor(1,1,'b');
-		//	}
-		//	else{
-		//		// if got ostacle, stop
-		//		moveMotor(0,0,'b');
-		//	}
-		//}
 
-		// if only one limit switch triggered
-		else {
-			// stop
-			//writeDebugStreamLine("Reverse");
-			moveMotor(1,1,'b',0);
+		if (backSensorReading() <= 20){
+			stop_t = nSysTime;
+			while (nSysTime - stop_t < 2000 && backSensorReading() <= 20){
+				moveMotor(0, 0, 'b', 0);
+			}
+			if (nSysTime - stop_t > 2000){
+				if (checked_right == false){
+					pan_to_heading(0);
+					while (SensorValue(Power_Switch) == Power_Switch_ON && SensorValue(leftLF) != 0 && SensorValue(rightLF) != 0){
+					moveMotor(0.8, 0.8, 'f', 40);
+					}
+				}
+				else{
+					pan_to_heading(180);
+					move_straight(80);
+				}
+
+				moveMotor(0, 0, 'f', 0);
+				pan_to_heading(90);
+				checked_right = true;
+			}
+			// pan_to_heading(90);
+			reverse_t = reverse_t + nSysTime - stop_t;
+		}
+
+
+
+		//Ball stuck at back of robot
+		if (nSysTime - reverse_t > 10000 && backSensorReading() > 20){
+			pan_by_degree(180,'r');
+			pan_by_degree(180,'r');
+			pan_to_heading(90);
+			reverse_t = nSysTime;
 		}
 	}
+
 	return 0;
 }
 
+
 /*Perform obstacle avoidance
-Output: 0 - obstacle avoidance is not performed, resume previous action
-		1 - heading change for obstacle avoidance
+Output: 0 - heading change for obstacle avoidance
+1 - obstacle avoidance is not performed, resume previous action
 */
 int obstacle_avoidance(){
-	int prev_heading = phase;
-	int dist = 30;
-	int flag = 0;
-	if (topSensorReading() <= 40 && flag == 0){
-		flag = 1;
+	int dist = 30;	// threshold enemy distance
+	int flag = 1;
+	if (topSensorReading() <= dist && flag == 1){
+		flag = 0;
 		int current_t = nSysTime;
-		while(nSysTime - current_t < 3000){
+		while(nSysTime - current_t < 1500){
 			moveMotor(0,0,'f',0);
 		}
 	}
 
-	if (topSensorReading() <= 40 && flag == 1){
-		int new_heading = prev_heading + 90;
-		if (new_heading == 360) new_heading = 0;
-		pan_to_heading(new_heading);
+	if (topSensorReading() <= dist && flag == 0){
+		phase -= 90;
+		if (phase < 0) phase = 270;
+		pan_to_heading(phase);
 	}
-	return flag;
+	else flag = 1;		// 1 - continue straight after enemy clear	// 0 - change phase regardless
+		return flag;
 }
 
 
