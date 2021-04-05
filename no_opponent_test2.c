@@ -1,5 +1,4 @@
 #pragma config(UART_Usage, UART1, uartUserControl, baudRate9600, IOPins, None, None)
-#pragma config(UART_Usage, UART2, uartNotUsed, baudRate4800, IOPins, None, None)
 #pragma config(Sensor, in3,    leftIRSensor,   sensorAnalog)
 #pragma config(Sensor, in2,    rightIRSensor,  sensorAnalog)
 #pragma config(Sensor, in1,    topIRSensor,    sensorAnalog)
@@ -36,14 +35,14 @@ task main(){
 
 	while(true){
 		writeDebugStreamLine("Battery: %d",nAvgBatteryLevel);
-
+		//static bool first_launch = true;
 		while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
 			//main code here:
-
-			if (phase == 0)		bnsSerialSend(UART1, "Phase: 0..\n");
-			if (phase == 90)	bnsSerialSend(UART1, "Phase: 90..\n");
-			if (phase == 180)	bnsSerialSend(UART1, "Phase: 180..\n");
-			if (phase == 270)	bnsSerialSend(UART1, "Phase: 270..\n");
+			if (first_launch) {
+				if(move_straight(120)){
+				}
+				first_launch = false;
+			}
 
 			//bnsSerialSend(UART1, "Moving straight..\n");
 			if (move_straight(60)==0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
@@ -54,32 +53,25 @@ task main(){
 			if (pan_and_search(180, 'r') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
 			sleep(500);
 
+			if(phase==270 && round_count%2==1){
+				phase -= 90;
+			}
+
 			pan_to_heading(phase);		// Reorientate back to the phase as pan_by_degree is not extremely accurate
+
+			if (phase == 0)		bnsSerialSend(UART1, "Phase: 0..\n");
+			if (phase == 90)	bnsSerialSend(UART1, "Phase: 90..\n");
+			if (phase == 180)	bnsSerialSend(UART1, "Phase: 180..\n");
+			if (phase == 270)	bnsSerialSend(UART1, "Phase: 270..\n");
 
 		}
 		//If power is off, stop all motors and reinitalise variables
 		if(SensorValue(Power_Switch) == Power_Switch_OFF){
 			moveMotor(0,0,'f',0);
 			motor(roller)=0;
-			motor(servo)=-85;
+			motor(servo)=-100;
 			initialise();
 			//print_bluetooth(2,0);
 		}
 	}
 }
-
-//task main(){
-//	//Initialise variables and start multi-tasking for encoder tasks
-//	initialise();
-//	setBaudRate(UART1, baudRate9600);
-//	startTask(counting);
-//	startTask(mapping);
-
-//	while(true){
-//		while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
-//			 move_straight(30);
-//			 pan_to_heading(90);
-//			 sleep(500);
-//		}
-//	}
-//}
