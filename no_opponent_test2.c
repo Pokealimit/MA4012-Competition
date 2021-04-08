@@ -1,14 +1,16 @@
 #pragma config(UART_Usage, UART1, uartUserControl, baudRate9600, IOPins, None, None)
-#pragma config(Sensor, in3,    leftIRSensor,   sensorAnalog)
 #pragma config(Sensor, in2,    rightIRSensor,  sensorAnalog)
-#pragma config(Sensor, in1,    topIRSensor,    sensorAnalog)
+#pragma config(Sensor, in3,    leftIRSensor,   sensorAnalog)
 #pragma config(Sensor, in4,    backIRSensor,   sensorAnalog)
-#pragma config(Sensor, in5,    back_limit_1,    sensorAnalog)
+#pragma config(Sensor, in5,    back_limit_1,   sensorAnalog)
 #pragma config(Sensor, in6,    back_limit_2,   sensorAnalog)
+#pragma config(Sensor, in7,    topIRSensor,    sensorAnalog)
+#pragma config(Sensor, in8,    back_limit_4,   sensorAnalog)
 #pragma config(Sensor, dgtl1,  Power_Switch,   sensorDigitalIn)
 #pragma config(Sensor, dgtl2,  leftWheelSensor, sensorDigitalIn)
 #pragma config(Sensor, dgtl3,  rightWheelSensor, sensorDigitalIn)
 #pragma config(Sensor, dgtl4,  ball_limit_switch, sensorDigitalIn)
+#pragma config(Sensor, dgtl5,  back_limit_3,   sensorDigitalIn)
 #pragma config(Sensor, dgtl6,  leftLF,         sensorDigitalIn)
 #pragma config(Sensor, dgtl7,  rightLF,        sensorDigitalIn)
 #pragma config(Sensor, dgtl8,  compass_LSB,    sensorDigitalIn)
@@ -34,24 +36,43 @@ task main(){
 	startTask(mapping);
 
 	while(true){
-		writeDebugStreamLine("Battery: %d",nAvgBatteryLevel);
-		//static bool first_launch = true;
+		//writeDebugStreamLine("Battery: %d",nAvgBatteryLevel);
+		//writeDebugStreamLine("left distance = %f", leftSensorReading());
+		//writeDebugStreamLine("right distance = %f", rightSensorReading());
+		//delay(500);
+
 		while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
 			//main code here:
 			if (first_launch) {
+				bnsSerialSend(UART1, "First launch..\n");
 				if(move_straight(120)){
 				}
 				first_launch = false;
 			}
 
-			//bnsSerialSend(UART1, "Moving straight..\n");
+			if (next_launch) {
+				bnsSerialSend(UART1, "Next launch..\n");
+				if(move_straight(60)){
+				}
+				next_launch = false;
+			}
+
+			if (phase_change) phase_change = false;
+
 			if (move_straight(60)==0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
 			sleep(500);
 			//bnsSerialSend(UART1, "Panning..\n");
 			if (pan_and_search(180, 'r') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
 			sleep(500);
-			if (pan_and_search(180, 'r') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
-			sleep(500);
+
+			if (phase==180){
+				if (pan_and_search(180, 'l') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
+				sleep(500);
+			}
+			else{
+				if (pan_and_search(180, 'r') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
+				sleep(500);
+			}
 
 			if(phase==270 && round_count%2==1){
 				phase -= 90;
@@ -69,9 +90,8 @@ task main(){
 		if(SensorValue(Power_Switch) == Power_Switch_OFF){
 			moveMotor(0,0,'f',0);
 			motor(roller)=0;
-			motor(servo)=-100;
+			motor(servo)=-127;
 			initialise();
-			//print_bluetooth(2,0);
 		}
 	}
 }
