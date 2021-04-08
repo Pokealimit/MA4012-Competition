@@ -64,6 +64,9 @@ int counter;
 float phase;
 int round_count;
 bool first_launch;
+bool next_launch;
+bool phase_change;
+int boundary_count = 0;	// 2 - change phase during boundary avoidance
 /* -------------------------
 Timing
 ---------------------------*/
@@ -104,7 +107,7 @@ int topSensorReading(){
 
 int backSensorReading(){
 	//Sharp 4
-	float volt = (float)SensorValue[topIRSensor]/4096*5;
+	float volt = (float)SensorValue[backIRSensor]/4096*5;
 	float distance = 15.02 * pow(volt , -1.286);
 	return distance;
 }
@@ -183,6 +186,9 @@ void initialise(){
 	phase = 90;
 	round_count = 1;
 	first_launch = true;
+	next_launch = false;
+	phase_change = false;
+	boundary_count = 0;
 	//writeDebugStreamLine("Initialising...");
 }
 
@@ -194,28 +200,38 @@ int pan_by_degree(float degree, char dir);
 int pan_to_heading (float heading);
 int pan_and_search(float degree, char dir);
 int obstacle_avoidance();
+int boundary_avoidance_back();
 
 int boundary_avoidance(){
-	static int counter = 0;
-
+	static int timer = nSysTime;
 	if (SensorValue(leftLF) == 0 || SensorValue(rightLF) == 0){	//Checks left line follower
+
 		moving_back_t = nSysTime;
 		bnsSerialSend(UART1, "Boundary avoidance ...\n");
-		while (nSysTime - moving_back_t < 1500 && SensorValue(Power_Switch) == Power_Switch_ON){ //Move back at 0.3 speed for 0.4 seconds
+		while (nSysTime - moving_back_t < 750 && SensorValue(Power_Switch) == Power_Switch_ON){ //Move back at 0.3 speed for 0.4 seconds
 			moveMotor(0.3,0.3,'b',0);
 		}
 
-		counter++;
-		if (counter < 2){
+		boundary_count++;
+
+		if (boundary_count == 1 && phase==180){
+			phase -= 90;
+			//Increase round count when phase changing from 180 to 90 degrees
+			round_count++;
+			pan_to_heading(phase);
+			boundary_count = 0;
+			phase_change = true;
+		}
+
+		if (boundary_count < 2){
 			pan_to_heading(phase);
 		}
 		else {
 			phase -= 90;
 			if (phase < 0) phase = 270;
-			//Increase round count when phase changing from 180 to 90 degrees
-			if (phase==90) round_count++;
 			pan_to_heading(phase);
-			counter = 0;
+			boundary_count = 0;
+			phase_change = true;
 		}
 		//writeDebugStreamLine("return 0");
 		return 0;
@@ -236,7 +252,7 @@ int move_straight(float distance){
 	while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<distance){
 		moveMotor(1,1,dir,40);
 		motor[roller] = 127;
-		motor[servo] = -100;
+		motor[servo] = -80;
 		if(SensorValue[ball_limit_switch] == Ball_Limit_Switch_CONTACT){
 			ball_return();
 			return 0;
@@ -245,7 +261,8 @@ int move_straight(float distance){
 	moveMotor(0,0,'f',0);
 	writeDebugStreamLine("Move straight end...");
 	bnsSerialSend(UART1, "Move straight end..\n");
-	return 1;
+	if (phase_change) return 0;
+	else return 1;
 }
 
 /*
@@ -272,14 +289,14 @@ int pan_by_degree(float degree, char dir){
 	default: speed = 0.3;
 		break;
 	}
-	while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && fabs(odom.heading-current_heading)<degree){
+	while (SensorValue(Power_Switch) == Power_Switch_ON && fabs(odom.heading-current_heading)<degree){ //&& boundary_avoidance()
 		moveMotor(speed,speed,dir,0);
-		motor[roller] = 127;
-		motor[servo] = -100;
-		if(SensorValue[ball_limit_switch] == Ball_Limit_Switch_CONTACT){
-			ball_return();
-			return 0;
-		}
+		//motor[roller] = 127;
+		//motor[servo] = -70;
+		//if(SensorValue[ball_limit_switch] == Ball_Limit_Switch_CONTACT){
+		//	ball_return();
+		//	return 0;
+		//}
 	}
 	moveMotor(0,0,'f',0);
 	writeDebugStreamLine("Pan end...");
@@ -297,7 +314,7 @@ int pan_to_heading_uncallibrated(float heading){
 
 	pointer = (heading / 45) - 1;
 	if (pointer < 0)	pointer = 7;
-	while  (array[pointer] != compass() && SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
+	while  (array[pointer] != compass() && SensorValue(Power_Switch) == Power_Switch_ON){ //&& boundary_avoidance()
 		if(count_test) {
 			char test1[80]; sprintf(test1,"Moving to %d => Bouncing to %d\n",heading,array[pointer]); bnsSerialSend(UART1,test1);
 			count_test = 0;
@@ -308,20 +325,20 @@ int pan_to_heading_uncallibrated(float heading){
 
 		if (pointer_array_diff >= 0 && pointer_array_diff <=180 ){
 			minimum_t = nSysTime;
-			while (nSysTime - minimum_t < 200 && boundary_avoidance()){ //Move at least for 1 second for angles close to the landmarks
+			while (nSysTime - minimum_t < 200 ){ //&& boundary_avoidance() Move at least for 1 second for angles close to the landmarks
 				moveMotor(0.5,0.5,'r',0);
 			}
 		}
 		else {
 			minimum_t = nSysTime;
-			while (nSysTime - minimum_t < 200 && boundary_avoidance()){ //Move at least for 1 second for angles close to the landmarks
+			while (nSysTime - minimum_t < 200 ){ //&& boundary_avoidance() Move at least for 1 second for angles close to the landmarks
 				moveMotor(0.5,0.5,'l',0);
 			}
 		}
 	}
 	char test2[80]; sprintf(test2,"Compass reading : %d\n",compass()); bnsSerialSend(UART1,test2);
 
-	while  (heading != compass() && SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
+	while  (heading != compass() && SensorValue(Power_Switch) == Power_Switch_ON ){ //&& boundary_avoidance()
 		if(count_test3){
 			char test3[80]; sprintf(test3,"Bouncing to %d\n",heading);bnsSerialSend(UART1,test3);
 			count_test3 = 0;
@@ -343,7 +360,7 @@ Input: 0, 90, 180 and 270 only*/
 int pan_to_heading (float heading){
 	if (heading == 0){
 		pan_to_heading_uncallibrated(45);
-		pan_by_degree(25, 'r');
+		pan_by_degree(13, 'r');
 	}
 	else if (heading == 90){
 		pan_to_heading_uncallibrated(90);
@@ -364,10 +381,10 @@ int pan_and_search(float degree, char dir){
 	bnsSerialSend(UART1,"Pan start...\n");
 	float current_heading = odom.heading;
 	int enemy_detected = 0;
-	while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && fabs(odom.heading-current_heading)<degree){
+	while (SensorValue(Power_Switch) == Power_Switch_ON && fabs(odom.heading-current_heading)<degree){ //&&boundary_avoidance()
 		moveMotor(0.75,0.75,dir,0);
 		motor[roller] = 127;
-		motor[servo] = -100;
+		motor[servo] = -80;
 		if(leftSensorReading()<distanceThreshold || rightSensorReading()<distanceThreshold){
 			int current_t = nSysTime;
 			//TODO: Overpanning time need to be tuned
@@ -388,12 +405,14 @@ int pan_and_search(float degree, char dir){
 					while(!(leftSensorReading()<distanceThreshold || rightSensorReading()<distanceThreshold) && (nSysTime - current_t < 250))
 						moveMotor(0.75,0.75,'l',0);
 					moveMotor(0,0,'f',0);
+					motor[servo] = -80;
 					break;
 				case 'l':
 					current_t = nSysTime;
 					while(!(leftSensorReading()<distanceThreshold || rightSensorReading()<distanceThreshold) && (nSysTime - current_t < 250))
 						moveMotor(0.75,0.75,'r',0);
 					moveMotor(0,0,'f',0);
+					motor[servo] = -80;
 					break;
 				}
 			}
@@ -403,7 +422,16 @@ int pan_and_search(float degree, char dir){
 
 			writeDebugStreamLine("Ball detected...");
 			bnsSerialSend(UART1, "Ball detected..\n");
+			if(move_straight(75)==0) return 0;
+			/*
+			// allow the robot to move further straight again if ball still detected
+			switch(move_straight(50)){
+			case 0: return 0;
+			break;
+			case 1: if(leftSensorReading()<distanceThreshold || rightSensorReading()<distanceThreshold);
 			if(move_straight(50)==0) return 0;
+			break;
+			}*/
 		}
 		if(SensorValue[ball_limit_switch]== Ball_Limit_Switch_CONTACT){
 			ball_return();
@@ -447,12 +475,14 @@ int ball_return(void){
 	int reverse_t = nSysTime;
 	int stop_t;
 	bool checked_right = false;
+	float current_X;
+	float current_Y;
 
-	while (ball_caught==1 && SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance()){
-		moveMotor(1,1,'b',0);
-
+	while (ball_caught==1 && SensorValue(Power_Switch) == Power_Switch_ON){
+		if(compass() == 90 && boundary_avoidance_back()) moveMotor(1,1,'b',0);
+		else	pan_to_heading(90);
 		// if both back limit switch triggered
-		if (SensorValue[back_limit_1] == 0 && SensorValue[back_limit_2] == 0 && backSensorReading() > 20){
+		if (SensorValue(back_limit_3) == 0 && SensorValue(back_limit_4) == 0 && backSensorReading() > 20){
 			//if no obstacle, stop motor and release ball
 			writeDebugStreamLine("Both limit switch compressed");
 			writeDebugStreamLine("Reached the ball collection point.");
@@ -467,12 +497,25 @@ int ball_return(void){
 			ball_search += 1;
 
 			// move servo back to ready for ball position
-			motor[servo] = -100;
+			motor[servo] = -80;
 			phase = 90; 		//reset phase
 			odom.Y = 15;
 			round_count = 1;
 			moveMotor(0,0,'f',0);
-
+			next_launch = true;
+			boundary_count = 0;
+			if(SensorValue(leftLF) == 0) {
+				moveMotor(1,0,'f',0);
+				delay(500);
+				moveMotor(1,1,'f',40);
+				delay(500);
+			}
+			else if (SensorValue(rightLF) == 0) {
+				moveMotor(0,1,'f',0);
+				delay(500);
+				moveMotor(1,1,'f',40);
+				delay(500);
+			}
 			return 1;
 		}
 
@@ -481,35 +524,85 @@ int ball_return(void){
 			while (nSysTime - stop_t < 2000 && backSensorReading() <= 20){
 				moveMotor(0, 0, 'b', 0);
 			}
-			if (nSysTime - stop_t > 2000){
+			if (nSysTime - stop_t >= 1999){
 				if (checked_right == false){
+					current_Y = odom.Y;
+					current_X = odom.X;
+					while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<20){
+						moveMotor(1,1,'f',40);
+					}
 					pan_to_heading(0);
 					while (SensorValue(Power_Switch) == Power_Switch_ON && SensorValue(leftLF) != 0 && SensorValue(rightLF) != 0){
-					moveMotor(0.8, 0.8, 'f', 40);
+						moveMotor(0.8, 0.8, 'f', 40);
 					}
+					checked_right = true;
 				}
 				else{
+					current_Y = odom.Y;
+					current_X = odom.X;
+					while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<20){
+						moveMotor(1,1,'f',40);
+					}
 					pan_to_heading(180);
-					move_straight(80);
-				}
 
+					while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<80){
+						moveMotor(0.8, 0.8, 'f', 40);
+					}
+					checked_right = false;
+				}
+				moveMotor(0.3,0.3,'b',0);
+				delay(500);
 				moveMotor(0, 0, 'f', 0);
 				pan_to_heading(90);
-				checked_right = true;
+				//checked_right = true;
 			}
 			// pan_to_heading(90);
 			reverse_t = reverse_t + nSysTime - stop_t;
 		}
 
-
-
 		//Ball stuck at back of robot
-		if (nSysTime - reverse_t > 10000 && backSensorReading() > 20){
-			pan_by_degree(180,'r');
-			pan_by_degree(180,'r');
+		if (nSysTime - reverse_t > 8000 && backSensorReading() > 20){
+			//	current_Y = odom.Y;
+			//	current_X = odom.X;
+			//	while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<100){
+			//		moveMotor(1,1,'f',40);
+			//	}
+			//	pan_to_heading(90);
+			//	reverse_t = nSysTime;
+			//}
+
+			if (checked_right == false){
+				current_Y = odom.Y;
+				current_X = odom.X;
+				while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<20){
+					moveMotor(1,1,'f',40);
+				}
+				pan_to_heading(0);
+				while (SensorValue(Power_Switch) == Power_Switch_ON && SensorValue(leftLF) != 0 && SensorValue(rightLF) != 0){
+					moveMotor(0.8, 0.8, 'f', 40);
+				}
+				checked_right = true;
+			}
+			else{
+				current_Y = odom.Y;
+				current_X = odom.X;
+				while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<20){
+					moveMotor(1,1,'f',40);
+				}
+				pan_to_heading(180);
+
+				while (SensorValue(Power_Switch) == Power_Switch_ON && boundary_avoidance() && obstacle_avoidance() && sqrt(pow(odom.Y-current_Y,2)+pow(odom.X-current_X,2))<80){
+					moveMotor(0.8, 0.8, 'f', 40);
+				}
+				checked_right = false;
+			}
+			moveMotor(0.3,0.3,'b',0);
+			delay(500);
+			moveMotor(0, 0, 'f', 0);
 			pan_to_heading(90);
 			reverse_t = nSysTime;
 		}
+
 	}
 
 	return 0;
@@ -538,6 +631,23 @@ int obstacle_avoidance(){
 	}
 	else flag = 1;		// 1 - continue straight after enemy clear	// 0 - change phase regardless
 		return flag;
+}
+
+int boundary_avoidance_back(){
+	int moving_front_t;
+
+	if (( SensorValue(back_limit_1) == 0 || SensorValue(back_limit_2) == 0) && backSensorReading() > 20){
+		moving_front_t = nSysTime;
+		bnsSerialSend(UART1, "Boundary avoidance back ...\n");
+		while (nSysTime - moving_front_t < 750 && SensorValue(Power_Switch) == Power_Switch_ON){ //Move forward at 0.3 speed for 0.75 seconds
+			moveMotor(0.3,0.3,'f',40);
+		}
+		pan_to_heading(90);
+		//writeDebugStreamLine("return 0");
+		return 0;
+	}
+	//writeDebugStreamLine("return 1");
+	return 1;
 }
 
 
