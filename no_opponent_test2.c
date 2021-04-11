@@ -45,33 +45,29 @@ task main(){
 			//main code here:
 			if (first_launch) {
 				bnsSerialSend(UART1, "First launch..\n");
-				if(move_straight(120)){
-				}
-				first_launch = false;
+				if(move_straight(100))	first_launch = false;
 			}
 
 			if (next_launch) {
 				bnsSerialSend(UART1, "Next launch..\n");
-				if(move_straight(60)){
-				}
-				next_launch = false;
+				if(move_straight(60))	next_launch = false;
 			}
 
 			if (phase_change) phase_change = false;
 
 			if (move_straight(60)==0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
-			sleep(500);
+			delay(500);
 			//bnsSerialSend(UART1, "Panning..\n");
 			if (pan_and_search(180, 'r') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
-			sleep(500);
+			delay(500);
 
 			if (phase==180){
 				if (pan_and_search(180, 'l') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
-				sleep(500);
+				delay(500);
 			}
 			else{
 				if (pan_and_search(180, 'r') == 0 || SensorValue(Power_Switch) == Power_Switch_OFF) break;
-				sleep(500);
+				delay(500);
 			}
 
 			if(phase==270 && round_count%2==1){
