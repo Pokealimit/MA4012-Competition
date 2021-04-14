@@ -3,6 +3,7 @@ This repository contains the code for our group 3's robot (Rollin') for the MA40
 
 This code make use of RobotC and the following modules:
 - [BNSBluetooth Library by JMarple](https://github.com/JMarple/BNSBluetooth) (For Testing - see debug stream on android devices)
+
 C file used for competition:
 - main_competition.c    (main file used for competition)
 - var_competition.c     (variables and functions used for competition)
