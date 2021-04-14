@@ -3,7 +3,7 @@ This repository contains the code for our group 3's robot (Rollin') for the MA40
 
 <img src="./misc/Rollin_closeup.jpeg" width="400px" height="auto">>
 
-![Left shot of Rollin'](./misc/Rollin_left.jpeg)
+![Left shot of Rollin'](./misc/Rollin_left.jpeg | width=400)
 
 This code make use of RobotC and the following modules:
 - [BNSBluetooth Library by JMarple](https://github.com/JMarple/BNSBluetooth)
