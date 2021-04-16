@@ -9,6 +9,7 @@ C file used for competition:
 - var_competition.c     (variables and functions used for competition)
 - encoder_competition.c (encorder task used for competition)
 
+![Ball collection and return](./misc/collecting.gif)
 <img src="./misc/Rollin_front.jpeg" width="350px" height="auto"> <img src="./misc/Rollin_closeup.jpeg" width="350px" height="auto">
 <img src="./misc/Rollin_left.jpeg" width="350px" height="auto"> <img src="./misc/Rollin_back.jpeg" width="350px" height="auto">
 
